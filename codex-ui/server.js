@@ -83,30 +83,71 @@ app.get('/api/config/projectdir', (req, res) => {
   res.send({ projectDirectory: storedProjectDirectory });
 });
 
-// Agents File Management (AGENTS.md in repo root for now)
+// Agents File Management
 app.get('/api/agents', (req, res) => {
-  const agentsFilePath = path.join(__dirname, '../../AGENTS.md');
+  loadConfigFromMock(); // Ensure project directory is loaded if available
+  if (!storedProjectDirectory) {
+    return res.status(400).send({ error: 'Project Directory not configured. Please configure it first.' });
+  }
+
+  const filePathQueryParam = req.query.filePath || 'AGENTS.md';
+  const fullPath = path.join(storedProjectDirectory, filePathQueryParam);
+  const resolvedFullPath = path.resolve(fullPath);
+  const resolvedProjectDir = path.resolve(storedProjectDirectory);
+
+  if (!resolvedFullPath.startsWith(resolvedProjectDir)) {
+    return res.status(403).send({ error: 'Access denied: filePath is outside the project directory.' });
+  }
+
   try {
-    const content = fs.readFileSync(agentsFilePath, 'utf8');
-    res.send({ content });
+    const content = fs.readFileSync(fullPath, 'utf8');
+    res.send({ content, path: filePathQueryParam }); // Send back the path that was read
   } catch (error) {
-    console.error(`Error reading AGENTS.md at ${agentsFilePath}:`, error);
-    res.status(404).send({ error: 'AGENTS.md not found or could not be read.', details: error.message });
+    console.error(`Error reading file at ${fullPath}:`, error);
+    if (error.code === 'ENOENT') {
+        res.status(404).send({ error: `File not found at specified path: ${filePathQueryParam}`, details: error.message });
+    } else {
+        res.status(500).send({ error: 'Could not read file.', details: error.message });
+    }
   }
 });
 
 app.post('/api/agents', (req, res) => {
-  const { content } = req.body; 
-  const agentsFilePath = path.join(__dirname, '../../AGENTS.md');
-  if (typeof content !== 'string') {
-    return res.status(400).send({ error: 'Invalid content provided. Expecting { content: "NEW_CONTENT" }' });
+  loadConfigFromMock(); // Ensure project directory is loaded if available
+  if (!storedProjectDirectory) {
+    return res.status(400).send({ error: 'Project Directory not configured. Please configure it first.' });
   }
+
+  const { content } = req.body;
+  const pathFromBody = req.body.path || 'AGENTS.md'; // path is now expected in body
+
+  if (typeof content !== 'string') {
+    return res.status(400).send({ error: 'Invalid content provided. Expecting { path: "your/file.md", content: "NEW_CONTENT" }' });
+  }
+  if (typeof pathFromBody !== 'string') {
+    return res.status(400).send({ error: 'Invalid file path provided. Expecting { path: "your/file.md", content: "..." }' });
+  }
+
+
+  const fullPath = path.join(storedProjectDirectory, pathFromBody);
+  const resolvedFullPath = path.resolve(fullPath);
+  const resolvedProjectDir = path.resolve(storedProjectDirectory);
+
+  if (!resolvedFullPath.startsWith(resolvedProjectDir)) {
+    return res.status(403).send({ error: 'Access denied: filePath is outside the project directory.' });
+  }
+
   try {
-    fs.writeFileSync(agentsFilePath, content, 'utf8');
-    res.send({ message: 'AGENTS.md updated successfully.' });
+    // Ensure directory exists before writing
+    const dirName = path.dirname(fullPath);
+    if (!fs.existsSync(dirName)) {
+        fs.mkdirSync(dirName, { recursive: true });
+    }
+    fs.writeFileSync(fullPath, content, 'utf8');
+    res.send({ message: `File '${pathFromBody}' updated successfully.` });
   } catch (error) {
-    console.error(`Error writing to AGENTS.md at ${agentsFilePath}:`, error);
-    res.status(500).send({ error: 'Failed to update AGENTS.md.', details: error.message });
+    console.error(`Error writing to file at ${fullPath}:`, error);
+    res.status(500).send({ error: `Failed to update file '${pathFromBody}'.`, details: error.message });
   }
 });
 
@@ -125,13 +166,10 @@ app.post('/api/codex/execute', (req, res) => {
   if (!storedProjectDirectory) {
     return res.status(400).send({ error: 'Project Directory not configured. Please configure it first.' });
   }
-  // Basic check if project directory exists
   if (!fs.existsSync(storedProjectDirectory) || !fs.lstatSync(storedProjectDirectory).isDirectory()) {
     return res.status(400).send({ error: `Project directory "${storedProjectDirectory}" does not exist or is not a directory.`});
   }
 
-
-  // Escape double quotes in prompt for command line safety
   const escapedPrompt = prompt.replace(/"/g, '\\"');
   let command = `codex "${escapedPrompt}"`;
 
@@ -143,18 +181,16 @@ app.post('/api/codex/execute', (req, res) => {
   if (options && options.mode) {
     let approvalMode = options.mode;
     if (approvalMode === 'interactive') {
-      approvalMode = 'suggest'; // Mapping UI "interactive" to CLI "suggest"
+      approvalMode = 'suggest'; 
     }
-    // No need to escape here as these are fixed values
     command += ` --approval-mode ${approvalMode}`;
   }
   
-  command += ` --quiet`; // Add quiet flag
+  command += ` --quiet`;
 
   console.log(`Executing command: ${command}`);
   console.log(`In directory: ${storedProjectDirectory}`);
   console.log(`With API Key: ${storedApiKey ? '*********' : 'Not Set'}`);
-
 
   exec(command, {
     env: { ...process.env, 'OPENAI_API_KEY': storedApiKey },
@@ -162,7 +198,6 @@ app.post('/api/codex/execute', (req, res) => {
   }, (error, stdout, stderr) => {
     if (error) {
       console.error(`Codex execution error: ${error.message}`);
-      // Non-zero exit code is also an 'error' for exec
       return res.status(500).send({ 
         status: "error", 
         message: `Codex command failed with exit code ${error.code}.`, 
@@ -171,8 +206,6 @@ app.post('/api/codex/execute', (req, res) => {
         stderr: stderr 
       });
     }
-    // Even with no 'error' object, stderr might contain actual errors from codex CLI
-    // or just progress messages. For now, send both.
     res.send({ 
       status: "success", 
       stdout: stdout, 
@@ -181,8 +214,6 @@ app.post('/api/codex/execute', (req, res) => {
   });
 });
 
-
-// Placeholder for other API routes
 app.get('/api/hello', (req, res) => {
   res.send({ message: 'Hello from the backend!' });
 });

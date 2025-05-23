@@ -160,6 +160,88 @@ And it's **fully open-source** so you can see and contribute to how it develops!
 
 ---
 
+### Codex UI (Graphical Interface)
+
+For users who prefer a graphical interface over the command line, the `codex-ui` provides a web-based application to interact with the core functionalities of the Codex CLI.
+
+**Features:**
+
+*   **Project and API Key Configuration:** Securely input your OpenAI API key and specify the project directory Codex should operate on.
+*   **AGENTS.md Management:** View and edit `AGENTS.md` files (currently supports editing the `AGENTS.md` in the root of the project directory configured).
+*   **Task Management:** Input natural language prompts, select execution modes (Interactive, Auto-Edit, Full-Auto), and specify AI models.
+*   **Output Display:** View `stdout` and `stderr` from Codex execution.
+*   **Interactive Controls (Mock):** Buttons to "Approve" or "Reject" suggested changes (currently mock actions).
+
+**Running the Codex UI:**
+
+The Codex UI is located in the `codex-ui` directory within this repository.
+
+**Prerequisites:**
+
+*   Node.js (version 16.x or newer recommended, similar to the main CLI).
+*   `codex` CLI installed globally or accessible in your PATH (as the UI backend calls it).
+
+**Steps to Run:**
+
+1.  **Navigate to the UI directory:**
+    ```bash
+    cd codex-ui
+    ```
+
+2.  **Install Backend Dependencies:**
+    The backend server requires `express` and `cors`. If you haven't run `npm install` for these yet in the `codex-ui` directory:
+    ```bash
+    # In the codex-ui directory
+    npm install express cors
+    ```
+    *(Note: `concurrently` and `nodemon` were considered for development but are not strictly needed for basic execution if you run client and server separately).*
+
+3.  **Install Frontend Dependencies:**
+    The React frontend requires its own set of dependencies.
+    ```bash
+    # In the codex-ui directory
+    cd client
+    npm install
+    cd ..
+    ```
+
+4.  **Start the Backend Server:**
+    The backend server runs on port 5000 by default.
+    ```bash
+    # In the codex-ui directory
+    node server.js
+    ```
+    *(Alternatively, if you installed nodemon: `npm run server`)*
+
+5.  **Start the Frontend Development Server:**
+    The React app runs on port 3000 by default.
+    ```bash
+    # In another terminal, from the codex-ui directory
+    cd client
+    npm start
+    ```
+    *(This uses the `react-scripts start` command).*
+
+6.  **Access the UI:**
+    Open your web browser and navigate to `http://localhost:3000`.
+
+**Using the UI:**
+
+*   **Configuration:**
+    *   First, go to the "Configuration" section in the UI.
+    *   Enter your OpenAI API Key and click "Save API Key".
+    *   Enter the absolute path to your local project directory that you want Codex to work on and click "Save Project Directory".
+*   **AGENTS.md:**
+    *   View or edit the `AGENTS.md` content in the provided editor. Click "Save AGENTS.md" to save changes. (Currently points to `AGENTS.md` in the root of the configured project directory).
+*   **Execute Codex Task:**
+    *   Enter your prompt in the "Prompt" textarea.
+    *   Select the desired "Mode" and specify the "Model".
+    *   Click "Execute Codex".
+    *   Output (stdout, stderr) from the Codex CLI will be displayed.
+    *   Use the "Approve" or "Reject" buttons (currently mock actions) as needed.
+
+---
+
 ## Security model & permissions
 
 Codex lets you decide _how much autonomy_ the agent receives and auto-approval policy via the
